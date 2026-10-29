@@ -2,6 +2,7 @@
 
 import os
 import time
+import subprocess
 from typing import Dict, Any, Optional
 import yt_dlp
 
@@ -13,6 +14,39 @@ class MediaDownloader:
     def __init__(self, download_dir: str = settings.DOWNLOAD_DIR):
         self.download_dir = download_dir
         os.makedirs(self.download_dir, exist_ok=True)
+
+    def transcode_to_resolution(self, input_file: str, max_height: int) -> str:
+        """Transcode video to target resolution (e.g. 480p or 720p) if current resolution exceeds it."""
+        try:
+            probe_cmd = [
+                "ffprobe", "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=height", "-of", "default=noprint_wrappers=1:nokey=1",
+                input_file
+            ]
+            out = subprocess.check_output(probe_cmd, stderr=subprocess.STDOUT).decode().strip()
+            height = int(out)
+            if height <= max_height:
+                return input_file
+
+            base, ext = os.path.splitext(input_file)
+            output_file = f"{base}_{max_height}p{ext}"
+
+            encode_cmd = [
+                "ffmpeg", "-y", "-i", input_file,
+                "-vf", f"scale=-2:{max_height}",
+                "-c:v", "libx264", "-crf", "26", "-preset", "veryfast",
+                "-c:a", "aac", "-b:a", "128k",
+                output_file
+            ]
+            subprocess.run(encode_cmd, capture_output=True, check=True)
+
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                os.remove(input_file)
+                os.rename(output_file, input_file)
+                return input_file
+        except Exception:
+            pass
+        return input_file
 
     def download(
         self,
@@ -78,6 +112,10 @@ class MediaDownloader:
                 if audio_only:
                     base, _ = os.path.splitext(downloaded_file)
                     downloaded_file = f"{base}.mp3"
+                elif format_type and format_type.endswith("p") and os.path.exists(downloaded_file):
+                    target_h = int(format_type[:-1]) if format_type[:-1].isdigit() else 0
+                    if 0 < target_h < 1080:
+                        downloaded_file = self.transcode_to_resolution(downloaded_file, target_h)
 
                 file_size = os.path.getsize(downloaded_file) if os.path.exists(downloaded_file) else 0
 

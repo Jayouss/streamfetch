@@ -4,9 +4,13 @@ import os
 import math
 import glob
 import subprocess
+import socket
 from typing import Dict, Any, Optional, List
 import requests
 from app.core.config import settings
+
+# Increase default socket timeout to 600s to support large file uploads on residential connections
+socket.setdefaulttimeout(600)
 
 
 class TelegramRelay:
@@ -79,7 +83,7 @@ class TelegramRelay:
             "message": f"Terkoneksi ke bot @{bot_info.get('username')}. Video siap dikirim ke Telegram!"
         }
 
-    def split_video_for_telegram(self, file_path: str, target_max_mb: float = 42.0) -> List[str]:
+    def split_video_for_telegram(self, file_path: str, target_max_mb: float = 20.0) -> List[str]:
         """Automatically split video into streamable parts under Telegram's 50MB limit using fast stream copy."""
         file_size_bytes = os.path.getsize(file_path)
         file_size_mb = file_size_bytes / (1024 * 1024)
@@ -149,7 +153,7 @@ class TelegramRelay:
         file_size_mb = round(file_size_bytes / (1024 * 1024), 2)
 
         # Automatically segment large videos into streamable parts under Telegram 50MB limit
-        parts = self.split_video_for_telegram(file_path, target_max_mb=42.0)
+        parts = self.split_video_for_telegram(file_path, target_max_mb=20.0)
         total_parts = len(parts)
 
         url = f"https://api.telegram.org/bot{token}/sendVideo"
@@ -175,7 +179,7 @@ class TelegramRelay:
                         "caption": part_caption,
                         "supports_streaming": "true",
                     }
-                    resp = requests.post(url, data=data, files=files, timeout=300)
+                    resp = requests.post(url, data=data, files=files, timeout=600)
 
                 if resp.status_code != 200 or not resp.json().get("ok"):
                     err_desc = resp.json().get("description", "Unknown Telegram API error")
