@@ -1,7 +1,9 @@
 """Media Metadata Extractor powered by yt-dlp"""
 
 from typing import Dict, Any, List, Optional
+import os
 import yt_dlp
+from app.core.config import settings
 
 
 class MediaExtractor:
@@ -12,6 +14,9 @@ class MediaExtractor:
             "skip_download": True,
             "extract_flat": False,
         }
+        # Automatically attach cookies if available
+        if os.path.exists(settings.COOKIE_FILE):
+            self.ydl_opts["cookiefile"] = settings.COOKIE_FILE
 
     def inspect_url(self, url: str) -> Dict[str, Any]:
         """Extract media metadata and stream options without downloading."""
@@ -19,9 +24,14 @@ class MediaExtractor:
             raise ValueError("URL cannot be empty.")
 
         url = url.strip()
+        opts = dict(self.ydl_opts)
+        
+        # Fresh check for cookies.txt
+        if os.path.exists(settings.COOKIE_FILE):
+            opts["cookiefile"] = settings.COOKIE_FILE
 
         try:
-            with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
 
                 if info is None:

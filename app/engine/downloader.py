@@ -33,6 +33,10 @@ class MediaDownloader:
             "noplaylist": True,
         }
 
+        # Automatically use authenticated session cookies if present
+        if os.path.exists(settings.COOKIE_FILE):
+            ydl_opts["cookiefile"] = settings.COOKIE_FILE
+
         if audio_only:
             ydl_opts.update({
                 "format": "bestaudio/best",

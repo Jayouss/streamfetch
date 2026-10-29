@@ -32,8 +32,13 @@ Examples:
     parser.add_argument("-f", "--format", default="best", help="Target resolution (best, 1080p, 720p, 480p)")
     parser.add_argument("-a", "--audio", action="store_true", help="Extract audio only as MP3")
     parser.add_argument("-i", "--info", action="store_true", help="Inspect and display metadata only")
+    parser.add_argument("-c", "--cookies", help="Path to Netscape cookies.txt file for members-only / authenticated streams")
 
     args = parser.parse_args()
+
+    if args.cookies:
+        from app.core.config import settings
+        settings.COOKIE_FILE = os.path.abspath(args.cookies)
 
     print("\n⚡ StreamFetch Universal Downloader")
     print("=" * 60)

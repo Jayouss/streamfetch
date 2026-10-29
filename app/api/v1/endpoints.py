@@ -2,7 +2,7 @@
 
 import os
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -67,6 +67,42 @@ async def serve_downloaded_file(filename: str):
         filename=filename,
         media_type="application/octet-stream"
     )
+
+
+@router.get("/api/v1/cookies/status")
+async def get_cookie_status():
+    """Check if YouTube / Platform membership cookies are active."""
+    exists = os.path.exists(settings.COOKIE_FILE)
+    size = os.path.getsize(settings.COOKIE_FILE) if exists else 0
+    return {
+        "active": exists and size > 0,
+        "file_size_bytes": size,
+        "message": "Authenticated session active (Members-Only & Private videos unlocked)" if (exists and size > 0) else "No session cookies detected (Public videos only)"
+    }
+
+
+@router.post("/api/v1/cookies/upload")
+async def upload_cookie_file(file: UploadFile = File(...)):
+    """Upload Netscape-format cookies.txt to authenticate members-only content."""
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    with open(settings.COOKIE_FILE, "wb") as f:
+        f.write(content)
+
+    return {
+        "status": "SAVED",
+        "message": f"Successfully activated session cookies ({len(content)} bytes). Members-only videos are now unlocked!"
+    }
+
+
+@router.delete("/api/v1/cookies/delete")
+async def delete_cookie_file():
+    """Remove stored session cookies."""
+    if os.path.exists(settings.COOKIE_FILE):
+        os.remove(settings.COOKIE_FILE)
+    return {"message": "Session cookies removed."}
 
 
 @router.get("/health")

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
 
     DOWNLOAD_DIR: str = os.path.abspath("./downloads")
+    COOKIE_FILE: str = os.path.abspath("./cookies.txt")
     MAX_FILE_SIZE_MB: int = 500
 
     model_config = SettingsConfigDict(

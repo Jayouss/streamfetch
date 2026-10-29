@@ -54,3 +54,25 @@ def test_file_server_not_found():
 def test_file_server_path_traversal_protection():
     res = client.get("/api/v1/files/../../secret.txt")
     assert res.status_code in [403, 404]
+
+
+def test_cookie_status_endpoint():
+    res = client.get("/api/v1/cookies/status")
+    assert res.status_code == 200
+    assert "active" in res.json()
+    assert "message" in res.json()
+
+
+def test_cookie_upload_and_delete():
+    fake_cookie_content = b"# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1799999999\tSID\tsample_session_val\n"
+    res = client.post("/api/v1/cookies/upload", files={"file": ("cookies.txt", fake_cookie_content, "text/plain")})
+    assert res.status_code == 200
+    assert res.json()["status"] == "SAVED"
+
+    # Verify status is now active
+    status_res = client.get("/api/v1/cookies/status")
+    assert status_res.json()["active"] is True
+
+    # Delete cookies
+    del_res = client.delete("/api/v1/cookies/delete")
+    assert del_res.status_code == 200

@@ -23,9 +23,17 @@
         <span class="font-bold text-xl tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">StreamFetch</span>
         <span class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full font-mono">v0.1.0</span>
       </div>
-      <div class="flex items-center space-x-4 text-sm text-slate-400">
-        <a href="/docs" target="_blank" class="hover:text-blue-400 transition">Swagger API</a>
-        <a href="https://github.com/Jayouss" target="_blank" class="hover:text-white transition">GitHub</a>
+      <div class="flex items-center space-x-3 text-sm">
+        <button 
+          id="cookieBtn"
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-750 text-slate-300 text-xs transition"
+        >
+          <span>🍪</span>
+          <span id="cookieStatusText">Session: Public Only</span>
+          <span id="cookieDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+        </button>
+        <a href="/docs" target="_blank" class="text-slate-400 hover:text-blue-400 transition text-xs sm:text-sm">Swagger</a>
+        <a href="https://github.com/Jayouss" target="_blank" class="text-slate-400 hover:text-white transition text-xs sm:text-sm">GitHub</a>
       </div>
     </div>
   </header>
@@ -131,6 +139,54 @@
 
   </main>
 
+  <!-- Cookie Session Modal -->
+  <div id="cookieModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+      <button id="closeCookieModal" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl">&times;</button>
+      
+      <div class="flex items-center space-x-3 mb-4">
+        <span class="text-3xl">🍪</span>
+        <div>
+          <h3 class="text-lg font-bold text-white">Unlock Members-Only & Private Videos</h3>
+          <p class="text-xs text-slate-400">Authenticate with your YouTube / Platform subscription</p>
+        </div>
+      </div>
+
+      <div class="space-y-4 text-sm text-slate-300">
+        <p class="bg-blue-950/40 border border-blue-800/40 p-3 rounded-xl text-blue-200 text-xs">
+          <b>Kenapa butuh cookies?</b> Karena video langganan (*Members-Only*) hanya bisa dibuka jika YouTube tahu akun Google kamu yang sudah bayar membership.
+        </p>
+
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
+          <p class="font-semibold text-slate-200">Cara Ambil cookies.txt (Hanya 1 Menit):</p>
+          <ol class="list-decimal list-inside space-y-1 text-slate-400">
+            <li>Buka tab YouTube di Chrome tempat akunmu sudah login.</li>
+            <li>Pasang ekstensi Chrome: <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbngbenkjcffliehddfaccca" target="_blank" class="text-blue-400 underline font-medium">Get cookies.txt LOCALLY</a>.</li>
+            <li>Klik ekstensi tersebut ➔ Klik tombol <b>Export</b> untuk mendownload file <code class="text-amber-300">cookies.txt</code>.</li>
+            <li>Pilih file tersebut di tombol bawah ini:</li>
+          </ol>
+        </div>
+
+        <div>
+          <input type="file" id="cookieFileInput" accept=".txt" class="hidden" />
+          <button 
+            id="uploadCookieBtn"
+            class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl transition flex items-center justify-center space-x-2"
+          >
+            <span>📁 Upload File cookies.txt</span>
+          </button>
+        </div>
+
+        <div id="cookieModalAlert" class="hidden p-2.5 rounded-lg text-xs text-center"></div>
+
+        <div id="activeSessionBox" class="hidden pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+          <span class="text-emerald-400">🟢 Session Active (<span id="activeCookieSize">0</span> bytes)</span>
+          <button id="deleteCookieBtn" class="text-red-400 hover:text-red-300 underline">Logout / Hapus Cookies</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <footer class="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
     StreamFetch • Built with Python FastAPI & yt-dlp • Open Source
   </footer>
@@ -197,7 +253,11 @@
 
         previewCard.classList.remove('hidden');
       } catch (err) {
-        showAlert(err.message, true);
+        if (err.message.includes('Join this channel') || err.message.includes('members-only')) {
+          showAlert("🔒 Video ini adalah konten KHUSUS MEMBERSHIP (Berlangganan). Klik tombol 🍪 di pojok kanan atas untuk upload cookies akun YouTube-mu agar video ini bisa terdownload!", true);
+        } else {
+          showAlert(err.message, true);
+        }
       } finally {
         btnText.textContent = 'Fetch Media';
         btnSpinner.classList.add('hidden');
@@ -242,13 +302,97 @@
         document.body.removeChild(a);
 
       } catch (err) {
-        showAlert(err.message, true);
+        if (err.message.includes('Join this channel') || err.message.includes('members-only')) {
+          showAlert("🔒 Video ini adalah konten KHUSUS MEMBERSHIP (Berlangganan). Klik tombol 🍪 di pojok kanan atas untuk upload cookies akun YouTube-mu agar video ini bisa terdownload!", true);
+        } else {
+          showAlert(err.message, true);
+        }
       } finally {
         dlText.textContent = '⬇️ Download to Device';
         dlSpinner.classList.add('hidden');
         downloadBtn.disabled = false;
       }
     });
-  </script>
+    // --- Cookie Session Handling ---
+    const cookieBtn = document.getElementById('cookieBtn');
+    const cookieStatusText = document.getElementById('cookieStatusText');
+    const cookieDot = document.getElementById('cookieDot');
+    const cookieModal = document.getElementById('cookieModal');
+    const closeCookieModal = document.getElementById('closeCookieModal');
+    const uploadCookieBtn = document.getElementById('uploadCookieBtn');
+    const cookieFileInput = document.getElementById('cookieFileInput');
+    const cookieModalAlert = document.getElementById('cookieModalAlert');
+    const activeSessionBox = document.getElementById('activeSessionBox');
+    const activeCookieSize = document.getElementById('activeCookieSize');
+    const deleteCookieBtn = document.getElementById('deleteCookieBtn');
+
+    async function checkCookieStatus() {
+      try {
+        const res = await fetch('/api/v1/cookies/status');
+        const data = await res.json();
+        if (data.active) {
+          cookieStatusText.textContent = 'Session: Active 🟢';
+          cookieDot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400';
+          activeSessionBox.classList.remove('hidden');
+          activeCookieSize.textContent = data.file_size_bytes;
+        } else {
+          cookieStatusText.textContent = 'Session: Public Only';
+          cookieDot.className = 'w-2 h-2 rounded-full bg-slate-500';
+          activeSessionBox.classList.add('hidden');
+        }
+      } catch (err) {
+        console.error('Failed to check cookie status:', err);
+      }
+    }
+
+    cookieBtn.addEventListener('click', () => {
+      cookieModal.classList.remove('hidden');
+    });
+
+    closeCookieModal.addEventListener('click', () => {
+      cookieModal.classList.add('hidden');
+    });
+
+    uploadCookieBtn.addEventListener('click', () => {
+      cookieFileInput.click();
+    });
+
+    cookieFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/v1/cookies/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+        cookieModalAlert.className = 'p-2.5 rounded-lg text-xs text-center bg-emerald-950/60 text-emerald-300 border border-emerald-800';
+        cookieModalAlert.textContent = '✅ ' + data.message;
+        cookieModalAlert.classList.remove('hidden');
+
+        await checkCookieStatus();
+      } catch (err) {
+        cookieModalAlert.className = 'p-2.5 rounded-lg text-xs text-center bg-red-950/60 text-red-300 border border-red-800';
+        cookieModalAlert.textContent = '❌ ' + err.message;
+        cookieModalAlert.classList.remove('hidden');
+      }
+    });
+
+    deleteCookieBtn.addEventListener('click', async () => {
+      await fetch('/api/v1/cookies/delete', { method: 'DELETE' });
+      cookieModalAlert.className = 'p-2.5 rounded-lg text-xs text-center bg-slate-800 text-slate-300';
+      cookieModalAlert.textContent = 'Cookies removed.';
+      cookieModalAlert.classList.remove('hidden');
+      await checkCookieStatus();
+    });
+
+    // Check on page load
+    checkCookieStatus();
 </body>
 </html>
