@@ -156,3 +156,14 @@ def test_telegram_send_without_config_raises_error():
         settings.TELEGRAM_BOT_TOKEN = orig_cfg_token
         settings.TELEGRAM_CHAT_ID = orig_cfg_chat
 
+
+def test_telegram_split_video_for_small_file(tmp_path):
+    from app.engine.telegram_relay import telegram_relay
+    fake_file = tmp_path / "small_test.mp4"
+    fake_file.write_bytes(b"0" * (1024 * 1024))  # 1 MB
+
+    parts = telegram_relay.split_video_for_telegram(str(fake_file), target_max_mb=42.0)
+    assert len(parts) == 1
+    assert parts[0] == str(fake_file)
+
+

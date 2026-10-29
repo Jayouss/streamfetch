@@ -1,7 +1,10 @@
 """Telegram Relay Engine for streaming media directly to Telegram devices."""
 
 import os
-from typing import Dict, Any, Optional
+import math
+import glob
+import subprocess
+from typing import Dict, Any, Optional, List
 import requests
 from app.core.config import settings
 
@@ -76,6 +79,55 @@ class TelegramRelay:
             "message": f"Terkoneksi ke bot @{bot_info.get('username')}. Video siap dikirim ke Telegram!"
         }
 
+    def split_video_for_telegram(self, file_path: str, target_max_mb: float = 42.0) -> List[str]:
+        """Automatically split video into streamable parts under Telegram's 50MB limit using fast stream copy."""
+        file_size_bytes = os.path.getsize(file_path)
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        if file_size_mb <= 48.0:
+            return [file_path]
+
+        # Extract duration via ffprobe
+        duration = 0.0
+        try:
+            cmd = [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", file_path
+            ]
+            out = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode().strip()
+            duration = float(out)
+        except Exception:
+            pass
+
+        if duration <= 0:
+            duration = 600.0
+
+        num_parts = math.ceil(file_size_mb / target_max_mb)
+        segment_time = max(10, int(duration / num_parts))
+
+        base_dir = os.path.dirname(file_path)
+        name, ext = os.path.splitext(os.path.basename(file_path))
+        pattern = os.path.join(base_dir, f"{name}_part_%03d{ext}")
+
+        split_cmd = [
+            "ffmpeg", "-y", "-i", file_path,
+            "-c", "copy",
+            "-map", "0",
+            "-segment_time", str(segment_time),
+            "-f", "segment",
+            "-reset_timestamps", "1",
+            pattern
+        ]
+        try:
+            subprocess.run(split_cmd, capture_output=True, check=True)
+            search_pattern = os.path.join(base_dir, f"{name}_part_*{ext}")
+            parts = sorted(glob.glob(search_pattern))
+            if parts:
+                return parts
+        except Exception:
+            pass
+
+        return [file_path]
+
     def send_video(
         self,
         file_path: str,
@@ -83,7 +135,7 @@ class TelegramRelay:
         duration_seconds: int = 0,
         caption: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Send video file to Telegram with streamable flag enabled."""
+        """Send video file to Telegram with streamable flag enabled, automatically splitting if > 48MB."""
         token = self.bot_token if self.bot_token is not None else settings.TELEGRAM_BOT_TOKEN
         chat = self.chat_id if self.chat_id is not None else settings.TELEGRAM_CHAT_ID
 
@@ -96,47 +148,62 @@ class TelegramRelay:
         file_size_bytes = os.path.getsize(file_path)
         file_size_mb = round(file_size_bytes / (1024 * 1024), 2)
 
-        # Standard Bot API limit is 50MB
-        if file_size_mb > 50:
-            raise ValueError(
-                f"Ukuran video ({file_size_mb} MB) melebihi batas upload Telegram Bot API standar (50 MB). "
-                f"Saran: Di opsi kualitas, pilih 720p atau 480p agar ukuran video di bawah 50 MB."
-            )
-
-        video_caption = caption or f"🎬 {title}\n⚡ Streamable on Telegram Mobile"
-        if len(video_caption) > 1024:
-            video_caption = video_caption[:1020] + "..."
+        # Automatically segment large videos into streamable parts under Telegram 50MB limit
+        parts = self.split_video_for_telegram(file_path, target_max_mb=42.0)
+        total_parts = len(parts)
 
         url = f"https://api.telegram.org/bot{token}/sendVideo"
+        last_message_id = None
 
         try:
-            with open(file_path, "rb") as video_file:
-                files = {
-                    "video": (os.path.basename(file_path), video_file, "video/mp4")
-                }
-                data = {
-                    "chat_id": chat,
-                    "caption": video_caption,
-                    "supports_streaming": "true",
-                }
-                if duration_seconds > 0:
-                    data["duration"] = int(duration_seconds)
+            for idx, part_path in enumerate(parts, 1):
+                part_mb = round(os.path.getsize(part_path) / (1024 * 1024), 2)
+                if total_parts > 1:
+                    part_caption = f"🎬 {title}\n📦 Bagian {idx}/{total_parts} ({part_mb} MB) • ⚡ Streamable on Phone"
+                else:
+                    part_caption = caption or f"🎬 {title}\n⚡ Streamable on Telegram Mobile"
 
-                resp = requests.post(url, data=data, files=files, timeout=180)
+                if len(part_caption) > 1024:
+                    part_caption = part_caption[:1020] + "..."
 
-            if resp.status_code != 200 or not resp.json().get("ok"):
-                err_desc = resp.json().get("description", "Unknown Telegram API error")
-                if "chat not found" in err_desc.lower():
-                    err_desc += ". Pastikan kamu sudah klik START (/start) pada bot Telegram milikmu terlebih dahulu!"
-                raise ValueError(f"Telegram API Error: {err_desc}")
+                with open(part_path, "rb") as video_file:
+                    files = {
+                        "video": (os.path.basename(part_path), video_file, "video/mp4")
+                    }
+                    data = {
+                        "chat_id": chat,
+                        "caption": part_caption,
+                        "supports_streaming": "true",
+                    }
+                    resp = requests.post(url, data=data, files=files, timeout=300)
 
-            res_data = resp.json().get("result", {})
+                if resp.status_code != 200 or not resp.json().get("ok"):
+                    err_desc = resp.json().get("description", "Unknown Telegram API error")
+                    if "chat not found" in err_desc.lower():
+                        err_desc += ". Pastikan kamu sudah klik START (/start) pada bot Telegram milikmu terlebih dahulu!"
+                    raise ValueError(f"Telegram API Error: {err_desc}")
+
+                last_message_id = resp.json().get("result", {}).get("message_id")
+
+                # Clean up temporary split part
+                if part_path != file_path and os.path.exists(part_path):
+                    try:
+                        os.remove(part_path)
+                    except Exception:
+                        pass
+
+            if total_parts > 1:
+                success_msg = f"Video berukuran {file_size_mb} MB berhasil dipecah otomatis menjadi {total_parts} bagian (kualitas utuh) dan SEMUANYA telah terkirim ke Telegram! Buka Telegram di HP untuk langsung streaming."
+            else:
+                success_msg = f"Berhasil dikirim ke Telegram! ({file_size_mb} MB). Kamu bisa langsung buka Telegram di HP dan putar videonya."
+
             return {
                 "status": "SENT",
-                "message_id": res_data.get("message_id"),
+                "message_id": last_message_id,
                 "file_size_mb": file_size_mb,
+                "parts_sent": total_parts,
                 "title": title,
-                "message": f"Berhasil dikirim ke Telegram! ({file_size_mb} MB). Kamu bisa langsung buka Telegram di HP dan putar videonya."
+                "message": success_msg
             }
         except requests.RequestException as e:
             raise ValueError(f"Gagal mengunggah ke Telegram: {str(e)}")
