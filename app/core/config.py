@@ -1,0 +1,26 @@
+"""StreamFetch Configuration"""
+
+import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    ENVIRONMENT: str = "development"
+    PROJECT_NAME: str = "StreamFetch Universal Downloader"
+    VERSION: str = "0.1.0"
+
+    PORT: int = 8000
+    HOST: str = "0.0.0.0"
+
+    DOWNLOAD_DIR: str = os.path.abspath("./downloads")
+    MAX_FILE_SIZE_MB: int = 500
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+
+settings = Settings()
+os.makedirs(settings.DOWNLOAD_DIR, exist_ok=True)

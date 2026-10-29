@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StreamFetch — Universal Video & Stream Downloader</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+      50% { box-shadow: 0 0 30px rgba(147, 51, 234, 0.8); }
+    }
+    .glow-input { animation: pulse-glow 3s infinite; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <span class="text-2xl">⚡</span>
+        <span class="font-bold text-xl tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">StreamFetch</span>
+        <span class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full font-mono">v0.1.0</span>
+      </div>
+      <div class="flex items-center space-x-4 text-sm text-slate-400">
+        <a href="/docs" target="_blank" class="hover:text-blue-400 transition">Swagger API</a>
+        <a href="https://github.com/Jayouss" target="_blank" class="hover:text-white transition">GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main class="flex-1 max-w-4xl mx-auto px-4 py-12 w-full flex flex-col items-center">
+    
+    <div class="text-center max-w-2xl mb-10">
+      <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4 text-white">
+        Download Videos from <span class="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Any Domain</span>
+      </h1>
+      <p class="text-slate-400 text-base sm:text-lg">
+        Simply paste any media URL. Supports YouTube, TikTok, Twitter/X, Instagram, Reddit, Vimeo, Facebook, and generic HLS/m3u8 streams.
+      </p>
+    </div>
+
+    <!-- URL Input Card -->
+    <div class="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-2xl mb-8">
+      <form id="fetchForm" class="flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <input 
+            type="url" 
+            id="videoUrl" 
+            required
+            placeholder="Paste video URL here (e.g., https://...)" 
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-sm sm:text-base"
+          />
+        </div>
+        <button 
+          type="submit" 
+          id="fetchBtn"
+          class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-3.5 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-blue-600/30 whitespace-nowrap"
+        >
+          <span id="btnText">Fetch Media</span>
+          <span id="btnSpinner" class="hidden animate-spin">⏳</span>
+        </button>
+      </form>
+
+      <!-- Status Alerts -->
+      <div id="statusAlert" class="mt-4 hidden p-3 rounded-xl text-sm"></div>
+    </div>
+
+    <!-- Preview & Download Card -->
+    <div id="previewCard" class="w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl hidden">
+      <div class="flex flex-col sm:flex-row gap-6">
+        <!-- Thumbnail -->
+        <div class="sm:w-1/3 flex-shrink-0">
+          <img id="thumbImg" src="" alt="Thumbnail" class="w-full h-44 object-cover rounded-xl border border-slate-800 shadow" />
+          <div class="mt-2 flex items-center justify-between text-xs text-slate-400">
+            <span id="platformBadge" class="bg-purple-900/40 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded font-mono">Platform</span>
+            <span id="durationBadge" class="bg-slate-800 px-2 py-0.5 rounded font-mono">00:00</span>
+          </div>
+        </div>
+
+        <!-- Details & Actions -->
+        <div class="sm:w-2/3 flex flex-col justify-between">
+          <div>
+            <h2 id="videoTitle" class="text-lg font-bold text-white line-clamp-2 mb-1">Title Placeholder</h2>
+            <p id="videoUploader" class="text-sm text-slate-400 mb-4">By Uploader</p>
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex flex-col sm:flex-row gap-3">
+              <div class="flex-1">
+                <label class="block text-xs text-slate-400 mb-1">Select Quality / Format</label>
+                <select id="qualitySelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
+                  <option value="best">Highest Available Quality (MP4)</option>
+                  <option value="1080p">1080p Full HD</option>
+                  <option value="720p">720p HD</option>
+                  <option value="480p">480p SD</option>
+                  <option value="audio">Audio Only (MP3 192kbps)</option>
+                </select>
+              </div>
+            </div>
+
+            <button 
+              id="downloadBtn"
+              class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-900/30"
+            >
+              <span id="dlText">⬇️ Download to Device</span>
+              <span id="dlSpinner" class="hidden animate-spin">⏳</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supported Platforms Grid -->
+    <div class="mt-16 text-center w-full">
+      <h3 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-6">Supported Platforms & Protocols</h3>
+      <div class="flex flex-wrap justify-center gap-3 text-xs text-slate-400">
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">YouTube</span>
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">TikTok (No Watermark)</span>
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">Twitter / X</span>
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">Instagram Reels</span>
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">Facebook</span>
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">Reddit</span>
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">Vimeo</span>
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">Twitch Clips</span>
+        <span class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">Direct .MP4 / .M3U8 / HLS</span>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
+    StreamFetch • Built with Python FastAPI & yt-dlp • Open Source
+  </footer>
+
+  <script>
+    let currentMedia = null;
+
+    const fetchForm = document.getElementById('fetchForm');
+    const videoUrlInput = document.getElementById('videoUrl');
+    const fetchBtn = document.getElementById('fetchBtn');
+    const btnText = document.getElementById('btnText');
+    const btnSpinner = document.getElementById('btnSpinner');
+    const statusAlert = document.getElementById('statusAlert');
+
+    const previewCard = document.getElementById('previewCard');
+    const thumbImg = document.getElementById('thumbImg');
+    const videoTitle = document.getElementById('videoTitle');
+    const videoUploader = document.getElementById('videoUploader');
+    const platformBadge = document.getElementById('platformBadge');
+    const durationBadge = document.getElementById('durationBadge');
+    const qualitySelect = document.getElementById('qualitySelect');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const dlText = document.getElementById('dlText');
+    const dlSpinner = document.getElementById('dlSpinner');
+
+    function showAlert(msg, isError = false) {
+      statusAlert.classList.remove('hidden', 'bg-red-950/50', 'text-red-400', 'border-red-800', 'bg-emerald-950/50', 'text-emerald-400', 'border-emerald-800');
+      if (isError) {
+        statusAlert.classList.add('bg-red-950/50', 'text-red-400', 'border', 'border-red-800');
+      } else {
+        statusAlert.classList.add('bg-emerald-950/50', 'text-emerald-400', 'border', 'border-emerald-800');
+      }
+      statusAlert.textContent = msg;
+    }
+
+    // 1. Fetch Metadata
+    fetchForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = videoUrlInput.value.trim();
+      if (!url) return;
+
+      btnText.textContent = 'Inspecting...';
+      btnSpinner.classList.remove('hidden');
+      fetchBtn.disabled = true;
+      previewCard.classList.add('hidden');
+      statusAlert.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/v1/info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to inspect media stream.');
+
+        currentMedia = data;
+        thumbImg.src = data.thumbnail || 'https://via.placeholder.com/640x360?text=No+Thumbnail';
+        videoTitle.textContent = data.title;
+        videoUploader.textContent = `Uploaded by ${data.uploader}`;
+        platformBadge.textContent = data.platform;
+        durationBadge.textContent = data.duration_formatted;
+
+        previewCard.classList.remove('hidden');
+      } catch (err) {
+        showAlert(err.message, true);
+      } finally {
+        btnText.textContent = 'Fetch Media';
+        btnSpinner.classList.add('hidden');
+        fetchBtn.disabled = false;
+      }
+    });
+
+    // 2. Download Execution
+    downloadBtn.addEventListener('click', async () => {
+      if (!currentMedia) return;
+
+      const formatVal = qualitySelect.value;
+      const isAudio = formatVal === 'audio';
+
+      dlText.textContent = isAudio ? 'Extracting MP3...' : 'Downloading Video...';
+      dlSpinner.classList.remove('hidden');
+      downloadBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/v1/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: currentMedia.url,
+            format_type: formatVal,
+            audio_only: isAudio
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Download processing failed.');
+
+        showAlert(`✅ Download ready! (${data.file_size_mb} MB) Starting direct transfer to device...`, false);
+
+        // Trigger direct browser download
+        const fileUrl = `/api/v1/files/${encodeURIComponent(data.file_name)}`;
+        const a = document.createElement('a');
+        a.href = fileUrl;
+        a.download = data.file_name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+      } catch (err) {
+        showAlert(err.message, true);
+      } finally {
+        dlText.textContent = '⬇️ Download to Device';
+        dlSpinner.classList.add('hidden');
+        downloadBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

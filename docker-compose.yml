@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  streamfetch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: streamfetch-app
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - PORT=8000
+      - HOST=0.0.0.0
+      - DOWNLOAD_DIR=/app/downloads
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./downloads:/app/downloads
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - streamfetch-network
+
+networks:
+  streamfetch-network:
+    driver: bridge
