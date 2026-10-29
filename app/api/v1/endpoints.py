@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.core.config import settings
 from app.engine.extractor import media_extractor
 from app.engine.downloader import media_downloader
+from app.engine.telegram_relay import telegram_relay
 
 router = APIRouter(tags=["Media Operations"])
 
@@ -22,6 +23,16 @@ class DownloadRequest(BaseModel):
     url: str = Field(..., json_schema_extra={"example": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"})
     format_type: str = Field(default="best", json_schema_extra={"example": "best"})  # "best", "1080p", "720p", "480p", "360p"
     audio_only: bool = Field(default=False)
+
+
+class TelegramConfigRequest(BaseModel):
+    bot_token: str
+    chat_id: str
+
+
+class TelegramSendRequest(BaseModel):
+    url: str
+    format_type: str = Field(default="720p")
 
 
 # --- Endpoints ---
@@ -103,6 +114,53 @@ async def delete_cookie_file():
     if os.path.exists(settings.COOKIE_FILE):
         os.remove(settings.COOKIE_FILE)
     return {"message": "Session cookies removed."}
+
+
+@router.get("/api/v1/telegram/status")
+async def get_telegram_status():
+    """Get Telegram Bot connection and configuration status."""
+    return telegram_relay.get_status()
+
+
+@router.post("/api/v1/telegram/config")
+async def save_telegram_config(payload: TelegramConfigRequest):
+    """Save and validate Telegram Bot Token and Chat ID."""
+    try:
+        res = telegram_relay.update_config(payload.bot_token, payload.chat_id)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/api/v1/telegram/send")
+async def send_media_to_telegram(payload: TelegramSendRequest):
+    """Download video (using cookies/resolvers) and stream it directly to user's Telegram."""
+    try:
+        # Pre-check Telegram configuration before heavy download
+        tg_status = telegram_relay.get_status()
+        if not tg_status["configured"]:
+            raise ValueError("Telegram Bot belum disetup. Klik tombol '✈️ Telegram' di kanan atas untuk memasukkan Bot Token & Chat ID.")
+
+        # 1. Download video locally
+        dl_res = media_downloader.download(
+            url=payload.url,
+            format_type=payload.format_type,
+            audio_only=False
+        )
+
+        file_path = dl_res["file_path"]
+        title = dl_res["title"]
+        duration = dl_res.get("duration_seconds", 0)
+
+        # 2. Upload to Telegram with streaming flag
+        tg_res = telegram_relay.send_video(
+            file_path=file_path,
+            title=title,
+            duration_seconds=duration
+        )
+        return tg_res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/health")

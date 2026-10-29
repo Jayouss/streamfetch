@@ -32,6 +32,15 @@
           <span id="cookieStatusText">Session: Public Only</span>
           <span id="cookieDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
         </button>
+        <button 
+          id="telegramModalBtn"
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-750 text-slate-300 text-xs transition"
+          title="Setup Telegram Sync to stream on mobile"
+        >
+          <span>✈️</span>
+          <span id="tgStatusText">Telegram: Off</span>
+          <span id="tgDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+        </button>
         <a href="/docs" target="_blank" class="text-slate-400 hover:text-blue-400 transition text-xs sm:text-sm">Swagger</a>
         <a href="https://github.com/Jayouss" target="_blank" class="text-slate-400 hover:text-white transition text-xs sm:text-sm">GitHub</a>
       </div>
@@ -109,13 +118,23 @@
               </div>
             </div>
 
-            <button 
-              id="downloadBtn"
-              class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-900/30"
-            >
-              <span id="dlText">⬇️ Download to Device</span>
-              <span id="dlSpinner" class="hidden animate-spin">⏳</span>
-            </button>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button 
+                id="downloadBtn"
+                class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-900/30 text-xs sm:text-sm"
+              >
+                <span id="dlText">⬇️ Download to PC</span>
+                <span id="dlSpinner" class="hidden animate-spin">⏳</span>
+              </button>
+
+              <button 
+                id="sendTelegramBtn"
+                class="w-full bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-sky-900/30 text-xs sm:text-sm"
+              >
+                <span id="tgBtnText">✈️ Send to Telegram (Phone Stream)</span>
+                <span id="tgBtnSpinner" class="hidden animate-spin">⏳</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -183,6 +202,64 @@
           <span class="text-emerald-400">🟢 Session Active (<span id="activeCookieSize">0</span> bytes)</span>
           <button id="deleteCookieBtn" class="text-red-400 hover:text-red-300 underline">Logout / Hapus Cookies</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Telegram Sync Modal -->
+  <div id="telegramModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+      <button id="closeTelegramModal" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl">&times;</button>
+      
+      <div class="flex items-center space-x-3 mb-4">
+        <span class="text-3xl">✈️</span>
+        <div>
+          <h3 class="text-lg font-bold text-white">Stream Video di HP via Telegram</h3>
+          <p class="text-xs text-slate-400">Kirim video dari PC ke Telegram pribadi agar bisa langsung di-stream di HP kapan saja tanpa harus nyalakan PC.</p>
+        </div>
+      </div>
+
+      <!-- Quick Steps -->
+      <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 mb-4 text-xs text-slate-300 space-y-2">
+        <p class="font-semibold text-slate-200">Cara Setup 1 Menit:</p>
+        <ol class="list-decimal list-inside space-y-1 text-slate-400">
+          <li>Buka Telegram, chat <b class="text-sky-400">@BotFather</b> lalu ketik <code class="bg-slate-900 px-1 py-0.5 rounded text-slate-200">/newbot</code>. Copy <b>HTTP API Token</b>-nya.</li>
+          <li>Buka bot barumu di Telegram, klik <b>START</b>.</li>
+          <li>Chat <b class="text-sky-400">@userinfobot</b> untuk melihat <b>ID</b> akun Telegram-mu.</li>
+        </ol>
+      </div>
+
+      <div class="space-y-3 mb-5">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Bot Token (dari @BotFather)</label>
+          <input 
+            type="password" 
+            id="tgBotTokenInput" 
+            placeholder="123456789:ABCdefGhIJKlmNoPQRstuvWXyz..." 
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Telegram Chat ID / User ID (dari @userinfobot)</label>
+          <input 
+            type="text" 
+            id="tgChatIdInput" 
+            placeholder="Contoh: 123456789 atau -100xxxxxxxx" 
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500"
+          />
+        </div>
+      </div>
+
+      <div id="tgModalAlert" class="hidden mb-4 p-2.5 rounded-lg text-xs text-center"></div>
+
+      <div class="flex items-center justify-between gap-3">
+        <button 
+          id="saveTgConfigBtn"
+          class="w-full bg-sky-600 hover:bg-sky-500 text-white font-medium py-2.5 rounded-xl transition text-xs sm:text-sm flex items-center justify-center space-x-2 shadow-lg shadow-sky-900/30"
+        >
+          <span id="saveTgText">Save & Connect Bot</span>
+          <span id="saveTgSpinner" class="hidden animate-spin">⏳</span>
+        </button>
       </div>
     </div>
   </div>
@@ -392,8 +469,138 @@
       await checkCookieStatus();
     });
 
+    // --- Telegram Sync Handling ---
+    const telegramModalBtn = document.getElementById('telegramModalBtn');
+    const tgStatusText = document.getElementById('tgStatusText');
+    const tgDot = document.getElementById('tgDot');
+    const telegramModal = document.getElementById('telegramModal');
+    const closeTelegramModal = document.getElementById('closeTelegramModal');
+    const tgBotTokenInput = document.getElementById('tgBotTokenInput');
+    const tgChatIdInput = document.getElementById('tgChatIdInput');
+    const tgModalAlert = document.getElementById('tgModalAlert');
+    const saveTgConfigBtn = document.getElementById('saveTgConfigBtn');
+    const saveTgText = document.getElementById('saveTgText');
+    const saveTgSpinner = document.getElementById('saveTgSpinner');
+
+    const sendTelegramBtn = document.getElementById('sendTelegramBtn');
+    const tgBtnText = document.getElementById('tgBtnText');
+    const tgBtnSpinner = document.getElementById('tgBtnSpinner');
+
+    let isTelegramConfigured = false;
+
+    async function checkTelegramStatus() {
+      try {
+        const res = await fetch('/api/v1/telegram/status');
+        const data = await res.json();
+        isTelegramConfigured = data.configured;
+        if (data.configured) {
+          tgStatusText.textContent = `@${data.bot_username || 'Bot'} 🟢`;
+          tgDot.className = 'w-2 h-2 rounded-full bg-sky-400 shadow-sm shadow-sky-400';
+          if (data.chat_id) tgChatIdInput.value = data.chat_id;
+        } else {
+          tgStatusText.textContent = 'Telegram: Off';
+          tgDot.className = 'w-2 h-2 rounded-full bg-slate-500';
+        }
+      } catch (err) {
+        console.error('Failed to check Telegram status:', err);
+      }
+    }
+
+    telegramModalBtn.addEventListener('click', () => {
+      telegramModal.classList.remove('hidden');
+    });
+
+    closeTelegramModal.addEventListener('click', () => {
+      telegramModal.classList.add('hidden');
+    });
+
+    saveTgConfigBtn.addEventListener('click', async () => {
+      const bot_token = tgBotTokenInput.value.trim();
+      const chat_id = tgChatIdInput.value.trim();
+
+      if (!bot_token || !chat_id) {
+        tgModalAlert.className = 'mb-4 p-2.5 rounded-lg text-xs text-center bg-red-950/60 text-red-300 border border-red-800';
+        tgModalAlert.textContent = '❌ Bot Token dan Chat ID wajib diisi.';
+        tgModalAlert.classList.remove('hidden');
+        return;
+      }
+
+      saveTgText.textContent = 'Verifying with Telegram...';
+      saveTgSpinner.classList.remove('hidden');
+      saveTgConfigBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/v1/telegram/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bot_token, chat_id })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Verifikasi bot gagal.');
+
+        tgModalAlert.className = 'mb-4 p-2.5 rounded-lg text-xs text-center bg-emerald-950/60 text-emerald-300 border border-emerald-800';
+        tgModalAlert.textContent = '✅ ' + data.message;
+        tgModalAlert.classList.remove('hidden');
+        await checkTelegramStatus();
+
+        setTimeout(() => {
+          telegramModal.classList.add('hidden');
+        }, 1500);
+      } catch (err) {
+        tgModalAlert.className = 'mb-4 p-2.5 rounded-lg text-xs text-center bg-red-950/60 text-red-300 border border-red-800';
+        tgModalAlert.textContent = '❌ ' + err.message;
+        tgModalAlert.classList.remove('hidden');
+      } finally {
+        saveTgText.textContent = 'Save & Connect Bot';
+        saveTgSpinner.classList.add('hidden');
+        saveTgConfigBtn.disabled = false;
+      }
+    });
+
+    sendTelegramBtn.addEventListener('click', async () => {
+      if (!currentMedia) return;
+
+      if (!isTelegramConfigured) {
+        telegramModal.classList.remove('hidden');
+        tgModalAlert.className = 'mb-4 p-2.5 rounded-lg text-xs text-center bg-amber-950/60 text-amber-300 border border-amber-800';
+        tgModalAlert.textContent = '⚠️ Hubungkan bot Telegram terlebih dahulu agar video bisa dikirim ke HP-mu.';
+        tgModalAlert.classList.remove('hidden');
+        return;
+      }
+
+      const formatVal = qualitySelect.value;
+      tgBtnText.textContent = 'Processing & Sending to TG...';
+      tgBtnSpinner.classList.remove('hidden');
+      sendTelegramBtn.disabled = true;
+      downloadBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/v1/telegram/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: currentMedia.url,
+            format_type: formatVal === 'audio' ? 'best' : (formatVal === 'best' ? '720p' : formatVal)
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Gagal mengirim ke Telegram.');
+
+        showAlert(`✈️ ${data.message}`, false);
+      } catch (err) {
+        showAlert('❌ ' + err.message, true);
+      } finally {
+        tgBtnText.textContent = '✈️ Send to Telegram (Phone Stream)';
+        tgBtnSpinner.classList.add('hidden');
+        sendTelegramBtn.disabled = false;
+        downloadBtn.disabled = false;
+      }
+    });
+
     // Check on page load
     checkCookieStatus();
+    checkTelegramStatus();
   </script>
 </body>
 </html>

@@ -107,3 +107,52 @@ def test_custom_stream_success_resolution():
         assert res["title"] == "Mock Video Title"
         assert res["platform"] == "jwplyr"
         assert res["formats"][0]["resolution"] == "Original Stream (MP4/HLS)"
+
+
+def test_telegram_status_endpoint():
+    res = client.get("/api/v1/telegram/status")
+    assert res.status_code == 200
+    assert "configured" in res.json()
+
+
+def test_telegram_config_validation():
+    # Empty token rejected
+    res = client.post("/api/v1/telegram/config", json={"bot_token": "", "chat_id": ""})
+    assert res.status_code == 400
+
+    # Valid mock token
+    with patch("requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"ok": True, "result": {"username": "MockBot", "first_name": "Mock"}}
+        mock_get.return_value = mock_resp
+
+        res_ok = client.post("/api/v1/telegram/config", json={"bot_token": "123:ABC", "chat_id": "999"})
+        assert res_ok.status_code == 200
+        assert res_ok.json()["bot_username"] == "MockBot"
+
+
+def test_telegram_send_without_config_raises_error():
+    from app.engine.telegram_relay import telegram_relay
+    from app.core.config import settings
+
+    orig_token = telegram_relay.bot_token
+    orig_chat = telegram_relay.chat_id
+    orig_cfg_token = settings.TELEGRAM_BOT_TOKEN
+    orig_cfg_chat = settings.TELEGRAM_CHAT_ID
+
+    telegram_relay.bot_token = ""
+    telegram_relay.chat_id = ""
+    settings.TELEGRAM_BOT_TOKEN = None
+    settings.TELEGRAM_CHAT_ID = None
+
+    try:
+        res = client.post("/api/v1/telegram/send", json={"url": "https://example.com/vid", "format_type": "720p"})
+        assert res.status_code == 400
+        assert "Telegram" in res.json()["detail"]
+    finally:
+        telegram_relay.bot_token = orig_token
+        telegram_relay.chat_id = orig_chat
+        settings.TELEGRAM_BOT_TOKEN = orig_cfg_token
+        settings.TELEGRAM_CHAT_ID = orig_cfg_chat
+

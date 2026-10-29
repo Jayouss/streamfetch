@@ -1,6 +1,7 @@
 """StreamFetch Configuration"""
 
 import os
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,9 @@ class Settings(BaseSettings):
     DOWNLOAD_DIR: str = os.path.abspath("./downloads")
     COOKIE_FILE: str = os.path.abspath("./cookies.txt")
     MAX_FILE_SIZE_MB: int = 500
+
+    TELEGRAM_BOT_TOKEN: Optional[str] = None
+    TELEGRAM_CHAT_ID: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
