@@ -1,6 +1,7 @@
 """Universal Media Download Pipeline powered by yt-dlp and Custom Resolvers."""
 
 import os
+import re
 import time
 import subprocess
 from typing import Dict, Any, Optional
@@ -67,6 +68,8 @@ class MediaDownloader:
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
+            "js_runtimes": {"node": {}},
+            "remote_components": ["ejs:github"],
         }
 
         # Check for custom resolver (e.g. jwplyr, vidoy)
@@ -103,39 +106,57 @@ class MediaDownloader:
             else:
                 ydl_opts["format"] = "best"
 
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(target_url, download=True)
-                downloaded_file = ydl.prepare_filename(info)
+        candidates = [target_url]
+        if not custom_data:
+            m_yt = re.search(r'(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})', target_url)
+            if m_yt:
+                vid = m_yt.group(1)
+                if 'I' in vid:
+                    candidates.append(target_url.replace(vid, vid.replace('I', 'l')))
+                if 'l' in vid:
+                    candidates.append(target_url.replace(vid, vid.replace('l', 'I')))
 
-                # If audio postprocessing was applied, extension is .mp3
-                if audio_only:
-                    base, _ = os.path.splitext(downloaded_file)
-                    downloaded_file = f"{base}.mp3"
-                elif format_type and format_type.endswith("p") and os.path.exists(downloaded_file):
-                    target_h = int(format_type[:-1]) if format_type[:-1].isdigit() else 0
-                    if 0 < target_h < 1080:
-                        downloaded_file = self.transcode_to_resolution(downloaded_file, target_h)
+        info = None
+        downloaded_file = None
+        last_error = None
 
-                file_size = os.path.getsize(downloaded_file) if os.path.exists(downloaded_file) else 0
+        for candidate_url in candidates:
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(candidate_url, download=True)
+                    downloaded_file = ydl.prepare_filename(info)
+                    break
+            except Exception as e:
+                last_error = e
+                continue
 
-                title = custom_data.get("title") if (custom_data and custom_data.get("title")) else info.get("title", "Downloaded Media")
+        if not info or not downloaded_file:
+            raise ValueError(f"Download failed: {str(last_error) if last_error else 'Unknown error'}")
 
-                return {
-                    "status": "COMPLETED",
-                    "title": title,
-                    "file_path": downloaded_file,
-                    "file_name": os.path.basename(downloaded_file),
-                    "file_size_bytes": file_size,
-                    "file_size_mb": round(file_size / (1024 * 1024), 2),
-                    "duration_seconds": info.get("duration", 0),
-                    "elapsed_time_seconds": round(time.time() - start_time, 2),
-                    "platform": custom_platform if custom_data else info.get("extractor_key", "Generic")
-                }
-        except yt_dlp.utils.DownloadError as e:
-            raise ValueError(f"Download failed: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"Unexpected download error: {str(e)}")
+        # If audio postprocessing was applied, extension is .mp3
+        if audio_only:
+            base, _ = os.path.splitext(downloaded_file)
+            downloaded_file = f"{base}.mp3"
+        elif format_type and format_type.endswith("p") and os.path.exists(downloaded_file):
+            target_h = int(format_type[:-1]) if format_type[:-1].isdigit() else 0
+            if 0 < target_h < 1080:
+                downloaded_file = self.transcode_to_resolution(downloaded_file, target_h)
+
+        file_size = os.path.getsize(downloaded_file) if os.path.exists(downloaded_file) else 0
+
+        title = custom_data.get("title") if (custom_data and custom_data.get("title")) else info.get("title", "Downloaded Media")
+
+        return {
+            "status": "COMPLETED",
+            "title": title,
+            "file_path": downloaded_file,
+            "file_name": os.path.basename(downloaded_file),
+            "file_size_bytes": file_size,
+            "file_size_mb": round(file_size / (1024 * 1024), 2),
+            "duration_seconds": info.get("duration", 0),
+            "elapsed_time_seconds": round(time.time() - start_time, 2),
+            "platform": custom_platform if custom_data else info.get("extractor_key", "Generic")
+        }
 
 
 media_downloader = MediaDownloader()

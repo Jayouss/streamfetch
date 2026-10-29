@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, List, Optional
 import os
+import re
 import yt_dlp
 from app.core.config import settings
 from app.engine.custom_resolvers import resolve_custom_stream, resolve_generic_html5
@@ -14,6 +15,8 @@ class MediaExtractor:
             "no_warnings": True,
             "skip_download": True,
             "extract_flat": False,
+            "js_runtimes": {"node": {}},
+            "remote_components": ["ejs:github"],
         }
         # Automatically attach cookies if available
         if os.path.exists(settings.COOKIE_FILE):
@@ -81,75 +84,88 @@ class MediaExtractor:
                     ]
                 }
 
-        # 2. Standard yt-dlp Extractor
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=False)
+        # 2. Standard yt-dlp Extractor with Auto-Correction for Ambiguous IDs (e.g. I vs l)
+        candidates = [url]
+        m_yt = re.search(r'(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
+        if m_yt:
+            vid = m_yt.group(1)
+            if 'I' in vid:
+                candidates.append(url.replace(vid, vid.replace('I', 'l')))
+            if 'l' in vid:
+                candidates.append(url.replace(vid, vid.replace('l', 'I')))
 
-                if info is None:
-                    raise ValueError(f"Could not extract metadata from URL: {url}")
+        info = None
+        for candidate_url in candidates:
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(candidate_url, download=False)
+                    if info:
+                        url = candidate_url
+                        break
+            except Exception:
+                continue
 
-                duration_sec = info.get("duration", 0) or 0
-                mins, secs = divmod(int(duration_sec), 60)
-                hours, mins = divmod(mins, 60)
-                duration_str = f"{hours:02d}:{mins:02d}:{secs:02d}" if hours else f"{mins:02d}:{secs:02d}"
+        if info is not None:
+            duration_sec = info.get("duration", 0) or 0
+            mins, secs = divmod(int(duration_sec), 60)
+            hours, mins = divmod(mins, 60)
+            duration_str = f"{hours:02d}:{mins:02d}:{secs:02d}" if hours else f"{mins:02d}:{secs:02d}"
 
-                raw_formats = info.get("formats", [])
-                available_qualities = set()
-                formats_summary: List[Dict[str, Any]] = []
+            raw_formats = info.get("formats", [])
+            available_qualities = set()
+            formats_summary: List[Dict[str, Any]] = []
 
-                for f in raw_formats:
-                    height = f.get("height")
-                    ext = f.get("ext", "mp4")
-                    vcodec = f.get("vcodec", "none")
+            for f in raw_formats:
+                height = f.get("height")
+                ext = f.get("ext", "mp4")
+                vcodec = f.get("vcodec", "none")
 
-                    if height and height not in available_qualities and vcodec != "none":
-                        available_qualities.add(height)
-                        formats_summary.append({
-                            "format_id": f.get("format_id"),
-                            "resolution": f"{height}p",
-                            "ext": ext,
-                            "filesize_approx": f.get("filesize") or f.get("filesize_approx")
-                        })
+                if height and height not in available_qualities and vcodec != "none":
+                    available_qualities.add(height)
+                    formats_summary.append({
+                        "format_id": f.get("format_id"),
+                        "resolution": f"{height}p",
+                        "ext": ext,
+                        "filesize_approx": f.get("filesize") or f.get("filesize_approx")
+                    })
 
-                formats_summary.sort(
-                    key=lambda x: int(x["resolution"].replace("p", "")) if x["resolution"].replace("p", "").isdigit() else 0,
-                    reverse=True
-                )
+            formats_summary.sort(
+                key=lambda x: int(x["resolution"].replace("p", "")) if x["resolution"].replace("p", "").isdigit() else 0,
+                reverse=True
+            )
 
-                return {
-                    "id": info.get("id"),
-                    "title": info.get("title", "Untitled Video"),
-                    "url": url,
-                    "uploader": info.get("uploader") or info.get("channel", "Unknown"),
-                    "duration_seconds": duration_sec,
-                    "duration_formatted": duration_str,
-                    "thumbnail": info.get("thumbnail"),
-                    "platform": info.get("extractor_key", "Generic"),
-                    "webpage_url": info.get("webpage_url", url),
-                    "formats": formats_summary[:8]
-                }
-        except yt_dlp.utils.DownloadError as e:
-            # 3. Fallback: Generic HTML5 stream scraper
-            generic_data = resolve_generic_html5(url)
-            if generic_data:
-                return {
-                    "id": generic_data["id"],
-                    "title": generic_data["title"],
-                    "url": url,
-                    "uploader": generic_data["platform"],
-                    "duration_seconds": 0,
-                    "duration_formatted": "Direct Stream",
-                    "thumbnail": generic_data["thumbnail"],
-                    "platform": generic_data["platform"],
-                    "webpage_url": url,
-                    "formats": [
-                        {"format_id": "direct", "resolution": "Direct Stream", "ext": "mp4", "filesize_approx": None}
-                    ]
-                }
-            raise ValueError(f"Failed to access media stream: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"Metadata extraction error: {str(e)}")
+            return {
+                "id": info.get("id"),
+                "title": info.get("title", "Untitled Video"),
+                "url": url,
+                "uploader": info.get("uploader") or info.get("channel", "Unknown"),
+                "duration_seconds": duration_sec,
+                "duration_formatted": duration_str,
+                "thumbnail": info.get("thumbnail"),
+                "platform": info.get("extractor_key", "Generic"),
+                "webpage_url": info.get("webpage_url", url),
+                "formats": formats_summary[:8]
+            }
+
+        # 3. Fallback: Generic HTML5 stream scraper
+        generic_data = resolve_generic_html5(url)
+        if generic_data:
+            return {
+                "id": generic_data["id"],
+                "title": generic_data["title"],
+                "url": url,
+                "uploader": generic_data["platform"],
+                "duration_seconds": 0,
+                "duration_formatted": "Direct Stream",
+                "thumbnail": generic_data["thumbnail"],
+                "platform": generic_data["platform"],
+                "webpage_url": url,
+                "formats": [
+                    {"format_id": "direct", "resolution": "Direct Stream", "ext": "mp4", "filesize_approx": None}
+                ]
+            }
+
+        raise ValueError(f"Failed to access media stream from URL: {url}. Pastikan URL valid dan session cookies aktif untuk konten eksklusif.")
 
 
 media_extractor = MediaExtractor()

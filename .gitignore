@@ -15,6 +15,7 @@ venv/
 .venv/
 .env
 .env.local
+cookies.txt
 downloads/
 *.mp4
 *.webm

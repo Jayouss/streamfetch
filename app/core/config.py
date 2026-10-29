@@ -13,8 +13,9 @@ class Settings(BaseSettings):
     PORT: int = 8000
     HOST: str = "0.0.0.0"
 
-    DOWNLOAD_DIR: str = os.path.abspath("./downloads")
-    COOKIE_FILE: str = os.path.abspath("./cookies.txt")
+    BASE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    DOWNLOAD_DIR: str = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")), "downloads")
+    COOKIE_FILE: str = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")), "cookies.txt")
     MAX_FILE_SIZE_MB: int = 500
 
     TELEGRAM_BOT_TOKEN: Optional[str] = None
