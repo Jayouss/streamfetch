@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.engine.extractor import media_extractor
 from app.engine.downloader import media_downloader
+from app.core.config import settings
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -64,19 +65,26 @@ def test_cookie_status_endpoint():
     assert "message" in res.json()
 
 
-def test_cookie_upload_and_delete():
-    fake_cookie_content = b"# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1799999999\tSID\tsample_session_val\n"
-    res = client.post("/api/v1/cookies/upload", files={"file": ("cookies.txt", fake_cookie_content, "text/plain")})
-    assert res.status_code == 200
-    assert res.json()["status"] == "SAVED"
+def test_cookie_upload_and_delete(tmp_path):
+    orig_cookie_file = settings.COOKIE_FILE
+    temp_cookie_path = str(tmp_path / "temp_test_cookies.txt")
+    settings.COOKIE_FILE = temp_cookie_path
 
-    # Verify status is now active
-    status_res = client.get("/api/v1/cookies/status")
-    assert status_res.json()["active"] is True
+    try:
+        fake_cookie_content = b"# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1799999999\tSID\tsample_session_val\n"
+        res = client.post("/api/v1/cookies/upload", files={"file": ("cookies.txt", fake_cookie_content, "text/plain")})
+        assert res.status_code == 200
+        assert res.json()["status"] == "SAVED"
 
-    # Delete cookies
-    del_res = client.delete("/api/v1/cookies/delete")
-    assert del_res.status_code == 200
+        # Verify status is now active
+        status_res = client.get("/api/v1/cookies/status")
+        assert status_res.json()["active"] is True
+
+        # Delete cookies
+        del_res = client.delete("/api/v1/cookies/delete")
+        assert del_res.status_code == 200
+    finally:
+        settings.COOKIE_FILE = orig_cookie_file
 
 
 def test_custom_stream_expired_url_raises_clear_error():
