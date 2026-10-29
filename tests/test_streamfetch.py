@@ -76,3 +76,12 @@ def test_cookie_upload_and_delete():
     # Delete cookies
     del_res = client.delete("/api/v1/cookies/delete")
     assert del_res.status_code == 200
+
+
+def test_custom_stream_expired_url_raises_clear_error():
+    # Expired video on jwplyr gives specific error instead of raw crash
+    with pytest.raises(ValueError) as excinfo:
+        media_extractor.inspect_url("https://jwplyr.com/e/4g80d06x099k")
+    assert "jwplyr.com" in str(excinfo.value)
+    assert "404" in str(excinfo.value)
+
