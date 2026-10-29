@@ -2,6 +2,7 @@
 
 import sys
 import os
+from unittest.mock import patch, MagicMock
 import pytest
 
 # Add project root to sys.path
@@ -79,9 +80,30 @@ def test_cookie_upload_and_delete():
 
 
 def test_custom_stream_expired_url_raises_clear_error():
-    # Expired video on jwplyr gives specific error instead of raw crash
-    with pytest.raises(ValueError) as excinfo:
-        media_extractor.inspect_url("https://jwplyr.com/e/4g80d06x099k")
-    assert "jwplyr.com" in str(excinfo.value)
-    assert "404" in str(excinfo.value)
+    # Expired video on jwplyr gives specific error
+    with patch("requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 301
+        mock_resp.headers = {"Location": "/404"}
+        mock_get.return_value = mock_resp
 
+        with pytest.raises(ValueError) as excinfo:
+            media_extractor.inspect_url("https://jwplyr.com/e/4g80d06x099k")
+        assert "jwplyr.com" in str(excinfo.value)
+        assert "404" in str(excinfo.value)
+
+
+def test_custom_stream_success_resolution():
+    with patch("app.engine.custom_resolvers.resolve_jwplyr") as mock_jw:
+        mock_jw.return_value = {
+            "id": "mock_id",
+            "title": "Mock Video Title",
+            "stream_url": "https://example.com/stream.mp4",
+            "thumbnail": "https://example.com/thumb.jpg",
+            "platform": "jwplyr",
+            "headers": {"Referer": "https://jwplyr.com/"}
+        }
+        res = media_extractor.inspect_url("https://jwplyr.com/e/mock_id")
+        assert res["title"] == "Mock Video Title"
+        assert res["platform"] == "jwplyr"
+        assert res["formats"][0]["resolution"] == "Original Stream (MP4/HLS)"
